@@ -62,7 +62,6 @@ class User:
 #u = User("a", [("blah", "0", "this is a a sample"), ("meh", "1", "this is another another example example example")])
 
 def tfidf(user, mode):
-    print(user.username)
     totalDocuments = user.numReviews
     numDocWithTerm = {}
     termFrequencyList = {}
@@ -142,6 +141,7 @@ def similarityBased(user):
         tfidf(temp_user, "badReviews")
         tfidf(temp_user, "all")
     
+    result = []
 
     def cosineSimilarity(userReviewTFIDF, otherReviewTFIDF):
         Scores = {}
@@ -165,15 +165,20 @@ def similarityBased(user):
             dotproduct += (userVector[term] * otherVector[term])
             d1 += math.pow(userVector[term], 2)
             d2 += math.pow(otherVector[term], 2)
-        print(d1, d2)
+
         if d1 == 0 or d2 == 0:
             return 0
         cosSimilarity = dotproduct / (math.sqrt(d1) * math.sqrt(d2))
         return cosSimilarity
     #print(len(user.good_tfidf_list), user.good_tfidf_list, user.username)
-
-    print(cosineSimilarity(user.good_tfidf_list[0][1], user.good_tfidf_list[1][1]))
-    print(user.good_tfidf_list[0][0][0], user.good_tfidf_list[1][0][0])
+    for username, other_user in userlist.items():
+        if username != user.username:
+            for other_tfIDFlist in other_user.all_tfidf_list:
+                result.append([cosineSimilarity(user.good_tfidf_list[1][1], other_tfIDFlist[1]), other_tfIDFlist[0]])
+    
+    print("Original", user.good_tfidf_list[1][0])
+    for item in reversed(sorted(result, key=lambda x:x[0])):
+        print(item[0], item[1][0])
 
 #Checks the Metacritic Search page and gets the top 5 games
 
