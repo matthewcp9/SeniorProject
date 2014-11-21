@@ -8,16 +8,49 @@ gameurl = 'https://byroredux-metacritic.p.mashape.com/search/game'
 key = "clcFDDQWvcmshavNiBerDhWS2mPbp1VzntCjsnLyj1W2ZiKb97"
 hdr = {'User-Agent': 'Chrome/37.0.2049.0'}
 
-gamelist = {}
 
 #http://www.metacritic.com/search/all/cod/results
+userlist = {}
+gamelist = []
 
-global userlist
+meta_platform_dict = {"playstation-4": "PS4",
+                      "xbox-one": "Xbox One",
+                      "playstation-3": "PS3",
+                      "xbox-360": "Xbox 360",
+                      "pc": "PC",
+                      "wii-u": "Wii U",
+                      "3ds": "3DS",
+                      "playstation-vita": "PS Vita",
+                      "ios": "iPhone/iPad",
+                      "legacy": "Legacy Console",
+                      "playstation-2": "Playstation 2",
+                      "dreamcast" : "Dreamcast",
+                      "psp": "PSP",
+                      "game-boy-advance" : "Game Boy Advance",
+                      "nintendo-64": "Nintendo 64",
+                      "wii" : "Wii",
+                      "xbox": "Xbox",
+                      "ds": "DS",
+                      "gamecube": "Gamecube",
+                    }
+
+class Game:
+    def __init__(self, name, genre, platform, developer):
+        self.name = name
+        self.genre = genre
+        self.platform = platform
+        self.developer = developer
+        self.reviewers = []
+
+    def printGame(self):
+        print(self.name, self.genre, self.platform, self.developer, self.reviewers)
+
 
 class User:
     def __init__(self, username, gamesReviewed):
         self.username = username
         self.gamesReviewed = gamesReviewed
+        print(self.gamesReviewed)
         self.updateAvgRating()
         self.updateNumReviews()
         self.updateAvgWordCt() #
@@ -36,7 +69,7 @@ class User:
                 self.badReviews.append(review)
 
     def updateUser(self, newReviews):
-        for review in newReviews not in self.gamesReviewed:
+        for review in [x for x in newReviews if x not in self.gamesReviewed]:
             if review[1] >= 7:
                 self.goodReviews.append(review)
             else:
@@ -45,7 +78,7 @@ class User:
         self.updateAvgRating()
         self.updateNumReviews()
         self.updateAvgWordCt()
-        self.updateReviews()
+        #self.updateReviews()
 
     def updateAvgRating(self):
         if len(self.gamesReviewed) > 0:
@@ -60,6 +93,15 @@ class User:
         self.numReviews = len(self.gamesReviewed)
 
 #u = User("a", [("blah", "0", "this is a a sample"), ("meh", "1", "this is another another example example example")])
+
+def generateGameList():
+    global userlist
+    global gamelist
+
+    for username, user in userlist.items():
+        for game in user.gamesReviewed:
+            if game[0] not in gamelist:
+                gamelist.append(game[0])
 
 def tfidf(user, mode):
     totalDocuments = user.numReviews
@@ -124,6 +166,54 @@ def tfidf(user, mode):
             
 
 
+def collaborativeFiltering(): 
+    global userlist
+    global gamelist
+
+    gameDict = {}
+    gameRecs = {}
+    def findCommonReviewers(game):
+        temp_list = []
+        for username, _user in userlist.items():
+            for _game in _user.gamesReviewed:
+                if game == _game[0]:
+                    temp_list.append((_user, _game[1] - _game[3])) #Append the username, and their score-avg score for the game 
+        return temp_list
+
+    listOfLikedGames = [x[0] for x in user.goodReviews]
+    listOfDislikedGames = [x[0] for x in user.badReviews]
+    temp_dict = {}
+    for game in gamelist:
+        avgRating = 0
+
+        for reviewer, their_score in findCommonReviewers(game):
+            for reviewer_game in reviewer.gamesReviewed:
+                score = 0
+                if reviewer_game[0] == game and reviewer_game[3].isdigit():
+                    avgRating = reviewer_game[3]
+
+                if reviewer_game[0] not in temp_dict:
+                    temp_dict[reviewer_game[0]] = []
+                temp_dict[reviewer_game[0]].append(their_score, (reviewer_game[1] - reviewer_game[3]))
+
+        for game_name, scores in temp_dict:
+            sumNumerator = 0
+            sumDenominator1 = 0
+            sumDenominator2 = 0
+            #scores[0] is  Ru,i - avg(Ri) where i is original 'game' variable, scores[1] is Ru,j - avg(Rj)
+            for score in scores:
+                sumNumerator +=  (scores[0] * scores[1])
+                sumDenominator1 += math.pow(scores[0], 2)
+                sumDenominator2 += math.pow(scores[1], 2)
+            sumDenominator1 = math.sqrt(sumDenominator1)
+            sumDenominator2 = math.sqrt(sumDenominator2)
+            if (sumDenominator1 * sumDenominator2 != 0):
+                gameRecs[game_name] = sumNumerator/(sumDenominator1 * sumDenominator2)
+            else:
+                gameRecs[game_name] = 0
+        gameDict[game] = reversed(sorted(gameRecs, key=lambda x:x[0]))[:10]
+
+
 # Suggest items based on difference between user and the item
 #A) Similarity based. You make four groups of reviews. 
 #1) Review texts of things the user has liked, (do tfidf on all good reviews)
@@ -131,7 +221,6 @@ def tfidf(user, mode):
 #3) Review texts of things everyone who liked the for each item (i) has said about,
 # 4) review text of things everyone who disliked for each item  item (i) has said.
 # Is the distance between |(1) - (3)| less than |(2) - (4)| ? if it is, then possible good item
-
 def similarityBased(user):
     global userlist
     
@@ -174,7 +263,7 @@ def similarityBased(user):
     for username, other_user in userlist.items():
         if username != user.username:
             for other_tfIDFlist in other_user.all_tfidf_list:
-                result.append([cosineSimilarity(user.good_tfidf_list[1][1], other_tfIDFlist[1]), other_tfIDFlist[0]])
+                result.append([math.degrees(math.acos(cosineSimilarity(user.good_tfidf_list[1][1], other_tfIDFlist[1]))), other_tfIDFlist[0]])
     
     print("Original", user.good_tfidf_list[1][0])
     for item in reversed(sorted(result, key=lambda x:x[0])):
@@ -208,18 +297,36 @@ def findGame(gamename):
                 raise Exception() 
             print("Searching for user reviews for %s for the %s" % (queriedRes[selected]['name'], queriedRes[selected]['platform']))
             url = queriedRes[selected]['url']
-            return beginGameSearch(url)
+            return beginGameSearch(url, queriedRes[selected]['name'])
     else:
         print("No games found similar to %s" % gamename)
 
+def gatherUsers(gameurl, usernames):
+    game_req = Request(gameurl, headers = hdr)
+    game_soup = bs4.BeautifulSoup(urlopen(game_req))
+    usernames += [b.attrs.get('href') for b in (game_soup.select("div.name a[href^=/user]"))]
+    next_check_soup = game_soup.findAll("span", {"class" : "flipper next"})
+    if next_check_soup:
+        next_check_soup = next_check_soup[0].find_all("a", href=True)
+    if not next_check_soup:
+        return usernames
+    else:
+        return gatherUsers("http://www.metacritic.com" + next_check_soup[0]['href'], usernames)
+
 @lru_cache(maxsize=32)
-def beginGameSearch(gameurl):
+def beginGameSearch(gameurl, gamename):
     global userlist
     global hdr
        
     game_req = Request(gameurl, headers = hdr)
     game_soup = bs4.BeautifulSoup(urlopen(game_req))
-    usernames = [b.attrs.get('href') for b in (game_soup.select("div.name a[href^=/user]"))]
+    game_object = Game(gamename, 
+                       game_soup.find("li", { "class" : "summary_detail product_genre" }).find("span", {"class" : "data"}).getText().strip(),
+                       meta_platform_dict[gameurl.split('/')[-2]] if gameurl.split('/')[-2] in meta_platform_dict else gameurl.split('/')[-2],
+                       game_soup.find("li", { "class" : "summary_detail developer" }).find("span", {"class" : "data"}).getText().strip())
+ 
+    usernames = gatherUsers(gameurl + "/user-reviews", [])
+    print(usernames)
     for name in usernames:
         name = name.split('/')[2] #split out the /user/ part
         if name in userlist:
@@ -228,8 +335,9 @@ def beginGameSearch(gameurl):
             games = beginUserSearch(name) 
             if games != "Bad User":
                 new_user = User(name, games)
+                game_object.reviewers.append(new_user)
                 userlist[name] = new_user
-            
+       
     return userlist
 
 def beginUserSearch(username):
@@ -265,7 +373,8 @@ def getUserReviews(user, games):
         games.extend(list(zip([productName.get_text() for productName in splitsoup.find_all ("div", { "class" : "product_title" })],
                               #[getPlatform((link.attrs.get('href'))) for platformLink in soup.select('div.review_content a[href^=/game]')],
                               [userScore.get_text() for userScore in splitsoup.find_all ("div", { "class" : "metascore_w" })],
-                              [collapse.get_text().encode('utf-8') + expand.get_text().encode('utf-8') for collapse,expand in zip(splitsoup.find_all("span", { "class" : "blurb_collapsed" }), splitsoup.find_all("span", { "class" : "blurb_expanded" }))])))
+                              [collapse.get_text().encode('utf-8') + expand.get_text().encode('utf-8') for collapse,expand in zip(splitsoup.find_all("span", { "class" : "blurb_collapsed" }), splitsoup.find_all("span", { "class" : "blurb_expanded" }))],
+                              [avgRating.get_text() for avgRating in splitsoup.find_all ("span", { "class" : ["data", "textscore"]})])))
         if not next_check_soup:
             return games
         else:
@@ -289,7 +398,9 @@ def main():
     userlist = {}
     reloadUsrList(userlist)
 
-    similarityBased(userlist["Woulong"])
+    generateGameList();
+
+    #similarityBased(userlist["Woulong"])
     #for review in userlist["Woulong"].tfidf_list:
         #print(review[1])
 
