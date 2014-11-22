@@ -50,7 +50,6 @@ class User:
     def __init__(self, username, gamesReviewed):
         self.username = username
         self.gamesReviewed = gamesReviewed
-        print(self.gamesReviewed)
         self.updateAvgRating()
         self.updateNumReviews()
         self.updateAvgWordCt() #
@@ -70,7 +69,7 @@ class User:
 
     def updateUser(self, newReviews):
         for review in [x for x in newReviews if x not in self.gamesReviewed]:
-            if review[1] >= 7:
+            if int(review[1]) >= 7:
                 self.goodReviews.append(review)
             else:
                 self.badReviews.append(review)
@@ -87,7 +86,10 @@ class User:
             self.avgRating = 0
 
     def updateAvgWordCt(self):
-        self.avgWordCt = sum(len(n[2]) for n in self.gamesReviewed)/len(self.gamesReviewed)
+        if len(self.gamesReviewed) > 0:
+            self.avgWordCt = sum(len(n[2]) for n in self.gamesReviewed)/len(self.gamesReviewed)
+        else:
+            self.avgWordCt = 0
     
     def updateNumReviews(self):
         self.numReviews = len(self.gamesReviewed)
@@ -165,6 +167,57 @@ def tfidf(user, mode):
         user.all_tfidf_list = appendList 
             
 
+def collaborativeFilteringSingle(game): 
+    global userlist
+    global gamelist
+
+    gameDict = {}
+    gameRecs = {}
+    def findCommonReviewers(game):
+        temp_list = []
+        for username, _user in userlist.items():
+            for _game in _user.gamesReviewed:
+                if game == _game[0]:
+                    temp_list.append((_user, float(_game[1]) - float(_game[3]))) #Append the username, and their score-avg score for the game 
+        return temp_list
+
+    temp_dict = {}
+
+    for reviewer, their_score in findCommonReviewers(game):
+        for reviewer_game in reviewer.gamesReviewed:
+            score = 0
+            if reviewer_game[0] == game and reviewer_game[3].isdigit():
+                avgRating = reviewer_game[3]
+
+            if reviewer_game[0] not in temp_dict:
+                temp_dict[reviewer_game[0]] = []
+            if reviewer_game[3] != "tbd":
+                temp_dict[reviewer_game[0]].append((their_score, (float(reviewer_game[1]) - float(reviewer_game[3]))))
+            else:
+                temp_dict[reviewer_game[0]].append((their_score, float(reviewer_game[1]) - 0))
+
+    for game_name, scores in temp_dict.items():
+        sumNumerator = 0
+        sumDenominator1 = 0
+        sumDenominator2 = 0
+        #scores[0] is  Ru,i - avg(Ri) where i is original 'game' variable, scores[1] is Ru,j - avg(Rj)
+        for score in scores:
+            sumNumerator +=  (score[0] * score[1])
+            sumDenominator1 += math.pow(score[0], 2)
+            sumDenominator2 += math.pow(score[1], 2)
+        sumDenominator1 = math.sqrt(sumDenominator1)
+        sumDenominator2 = math.sqrt(sumDenominator2)
+        if (sumDenominator1 * sumDenominator2 != 0):
+            gameRecs[game_name] = sumNumerator/(sumDenominator1 * sumDenominator2)
+        else:
+            gameRecs[game_name] = 0
+        if gameRecs[game_name] >= .85:
+            gameRecs[game_name] = -1
+    gameDict[game] = (list(reversed(sorted(gameRecs, key=lambda x:x[1]))))
+    #print(gameRecs)
+    print("Things similar to", game)
+    for tt in gameDict[game][:20]:
+        print(tt)
 
 def collaborativeFiltering(): 
     global userlist
@@ -212,6 +265,7 @@ def collaborativeFiltering():
             else:
                 gameRecs[game_name] = 0
         gameDict[game] = reversed(sorted(gameRecs, key=lambda x:x[0]))[:10]
+
 
 
 # Suggest items based on difference between user and the item
@@ -326,7 +380,6 @@ def beginGameSearch(gameurl, gamename):
                        game_soup.find("li", { "class" : "summary_detail developer" }).find("span", {"class" : "data"}).getText().strip())
  
     usernames = gatherUsers(gameurl + "/user-reviews", [])
-    print(usernames)
     for name in usernames:
         name = name.split('/')[2] #split out the /user/ part
         if name in userlist:
@@ -399,7 +452,7 @@ def main():
     reloadUsrList(userlist)
 
     generateGameList();
-
+    collaborativeFilteringSingle("The Elder Scrolls V: Skyrim")
     #similarityBased(userlist["Woulong"])
     #for review in userlist["Woulong"].tfidf_list:
         #print(review[1])
