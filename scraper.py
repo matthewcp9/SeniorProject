@@ -1,4 +1,5 @@
 import pickle, os, time, json, requests, bs4,sys, math
+from operator import itemgetter
 from copy import deepcopy
 from requests import Session
 from urllib.request import Request, urlopen
@@ -79,20 +80,27 @@ class User:
         self.updateAvgWordCt()
         #self.updateReviews()
 
+    """ TO DO : FIX UPDATE FUNCTIONS """
     def updateAvgRating(self):
-        if len(self.gamesReviewed) > 0:
+        try:
             self.avgRating = sum(int(n[1]) for n in self.gamesReviewed)/len(self.gamesReviewed) #location of review score per game
-        else :
+        except :
             self.avgRating = 0
 
     def updateAvgWordCt(self):
-        if len(self.gamesReviewed) > 0:
-            self.avgWordCt = sum(len(n[2]) for n in self.gamesReviewed)/len(self.gamesReviewed)
-        else:
+        try:
+            if len(self.gamesReviewed) > 0:
+                self.avgWordCt = sum(len(n[2]) for n in self.gamesReviewed)/len(self.gamesReviewed)
+            else:
+                self.avgWordCt = 0
+        except :
             self.avgWordCt = 0
     
     def updateNumReviews(self):
-        self.numReviews = len(self.gamesReviewed)
+        try:
+            self.numReviews = len(self.gamesReviewed)
+        except:
+            self.numReviews = 0
 
 #u = User("a", [("blah", "0", "this is a a sample"), ("meh", "1", "this is another another example example example")])
 
@@ -184,36 +192,42 @@ def collaborativeFilteringSingle(game):
     temp_dict = {}
 
     for reviewer, their_score in findCommonReviewers(game):
-        for reviewer_game in reviewer.gamesReviewed:
-            score = 0
-            if reviewer_game[0] == game and reviewer_game[3].isdigit():
-                avgRating = reviewer_game[3]
+        if reviewer.numReviews > 5:
+            for reviewer_game in reviewer.gamesReviewed:
+                score = 0
+                if reviewer_game[0] == game and reviewer_game[3].isdigit():
+                    avgRating = reviewer_game[3]
 
-            if reviewer_game[0] not in temp_dict:
-                temp_dict[reviewer_game[0]] = []
-            if reviewer_game[3] != "tbd":
-                temp_dict[reviewer_game[0]].append((their_score, (float(reviewer_game[1]) - float(reviewer_game[3]))))
-            else:
-                temp_dict[reviewer_game[0]].append((their_score, float(reviewer_game[1]) - 0))
+                if reviewer_game[0] not in temp_dict:
+                    temp_dict[reviewer_game[0]] = []
+                if len(reviewer_game) == 4 and reviewer_game[3] != "tbd":
+                    temp_dict[reviewer_game[0]].append((their_score, (float(reviewer_game[1]) - float(reviewer_game[3]))))
+                else:
+
+                    temp_dict[reviewer_game[0]].append((their_score, 0))
 
     for game_name, scores in temp_dict.items():
         sumNumerator = 0
         sumDenominator1 = 0
         sumDenominator2 = 0
+        if len(scores) > 10:
         #scores[0] is  Ru,i - avg(Ri) where i is original 'game' variable, scores[1] is Ru,j - avg(Rj)
-        for score in scores:
-            sumNumerator +=  (score[0] * score[1])
-            sumDenominator1 += math.pow(score[0], 2)
-            sumDenominator2 += math.pow(score[1], 2)
-        sumDenominator1 = math.sqrt(sumDenominator1)
-        sumDenominator2 = math.sqrt(sumDenominator2)
-        if (sumDenominator1 * sumDenominator2 != 0):
-            gameRecs[game_name] = sumNumerator/(sumDenominator1 * sumDenominator2)
-        else:
-            gameRecs[game_name] = 0
-        if gameRecs[game_name] >= .85:
-            gameRecs[game_name] = -1
-    gameDict[game] = (list(reversed(sorted(gameRecs, key=lambda x:x[1]))))
+            for score in scores:
+                sumNumerator +=  (score[0] * score[1])
+                sumDenominator1 += math.pow(score[0], 2)
+                sumDenominator2 += math.pow(score[1], 2)
+            sumDenominator1 = math.sqrt(sumDenominator1)
+            sumDenominator2 = math.sqrt(sumDenominator2)
+            if (sumDenominator1 * sumDenominator2 != 0):
+                gameRecs[game_name] = sumNumerator/(sumDenominator1 * sumDenominator2)
+            else:
+                gameRecs[game_name] = 0
+            if gameRecs[game_name] >= .95:
+                gameRecs[game_name] = -1
+    print(type(gameRecs), gameRecs)
+    print()
+    print(sorted(gameRecs.items(), key=itemgetter(1)))
+    gameDict[game] = list(reversed(sorted(gameRecs.items(), key=itemgetter(1))))
     #print(gameRecs)
     print("Things similar to", game)
     for tt in gameDict[game][:20]:
@@ -452,6 +466,7 @@ def main():
     reloadUsrList(userlist)
 
     generateGameList();
+    #print(userlist["faceless-1"].gamesReviewed)
     collaborativeFilteringSingle("The Elder Scrolls V: Skyrim")
     #similarityBased(userlist["Woulong"])
     #for review in userlist["Woulong"].tfidf_list:
