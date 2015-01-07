@@ -74,7 +74,7 @@ class User:
                 self.goodReviews.append(review)
             else:
                 self.badReviews.append(review)
-            self.gamesReviewed += review
+            self.gamesReviewed.append(review)
         self.updateAvgRating()
         self.updateNumReviews()
         self.updateAvgWordCt()
@@ -184,33 +184,40 @@ def collaborativeFilteringSingle(game):
     def findCommonReviewers(game):
         temp_list = []
         for username, _user in userlist.items():
-            for _game in _user.gamesReviewed:
+            for _game in _user.goodReviews:
                 if game == _game[0]:
-                    temp_list.append((_user, float(_game[1]) - float(_game[3]))) #Append the username, and their score-avg score for the game 
+                    if not username in [x[0].username for x in temp_list]:
+                        temp_list.append((_user, float(_game[1]) - float(_game[3]))) #Append the username, and their score-avg score for the game 
+        print(temp_list)
         return temp_list
 
     temp_dict = {}
-
+    print((findCommonReviewers(game)))
+    count = 0
     for reviewer, their_score in findCommonReviewers(game):
-        if reviewer.numReviews > 5:
-            for reviewer_game in reviewer.gamesReviewed:
+        print(reviewer.username)
+        if reviewer.numReviews > 0:
+            for reviewer_game in reviewer.goodReviews:
+                #reviewer_game consists of ["GAME_NAME", "USER's_RATING", "REVIEW_DESC", "GAME'S AVG_SCORE"]
+                avgRating = 0;
+                
+                if (isinstance(reviewer_game, str)):
+                    print("Found", reviewer_game)
                 score = 0
                 if reviewer_game[0] == game and reviewer_game[3].isdigit():
                     avgRating = reviewer_game[3]
 
                 if reviewer_game[0] not in temp_dict:
                     temp_dict[reviewer_game[0]] = []
-                if len(reviewer_game) == 4 and reviewer_game[3] != "tbd":
-                    temp_dict[reviewer_game[0]].append((their_score, (float(reviewer_game[1]) - float(reviewer_game[3]))))
-                else:
 
-                    temp_dict[reviewer_game[0]].append((their_score, 0))
+                if not isinstance(reviewer_game, str) and len(reviewer_game) == 4 and reviewer_game[3] != "tbd":
+                    temp_dict[reviewer_game[0]].append((their_score, (float(reviewer_game[1]) - float(reviewer_game[3]))))
 
     for game_name, scores in temp_dict.items():
         sumNumerator = 0
         sumDenominator1 = 0
         sumDenominator2 = 0
-        if len(scores) > 10:
+        if len(scores) > 5:
         #scores[0] is  Ru,i - avg(Ri) where i is original 'game' variable, scores[1] is Ru,j - avg(Rj)
             for score in scores:
                 sumNumerator +=  (score[0] * score[1])
@@ -222,8 +229,8 @@ def collaborativeFilteringSingle(game):
                 gameRecs[game_name] = sumNumerator/(sumDenominator1 * sumDenominator2)
             else:
                 gameRecs[game_name] = 0
-            if gameRecs[game_name] >= .95:
-                gameRecs[game_name] = -1
+            #if gameRecs[game_name] >= .95:
+                #gameRecs[game_name] = -1
     print(type(gameRecs), gameRecs)
     print()
     print(sorted(gameRecs.items(), key=itemgetter(1)))
@@ -467,7 +474,9 @@ def main():
 
     generateGameList();
     #print(userlist["faceless-1"].gamesReviewed)
-    collaborativeFilteringSingle("The Elder Scrolls V: Skyrim")
+    while True:
+        gamename = input('Enter a gamename to rec: ')
+        collaborativeFilteringSingle(gamename)
     #similarityBased(userlist["Woulong"])
     #for review in userlist["Woulong"].tfidf_list:
         #print(review[1])
